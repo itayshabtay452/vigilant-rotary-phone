@@ -8,6 +8,11 @@ from app.schemas.vehicle import VehicleCreate, VehicleResponse, VehicleUpdate
 router = APIRouter(prefix="/vehicles", tags=["vehicles"])
 
 
+@router.get("/", response_model=list[VehicleResponse])
+def list_vehicles(db: Session = Depends(get_db)) -> list[Vehicle]:
+    return db.query(Vehicle).order_by(Vehicle.created_at.desc()).all()
+
+
 @router.post("/", response_model=VehicleResponse, status_code=status.HTTP_201_CREATED)
 def create_vehicle(payload: VehicleCreate, db: Session = Depends(get_db)) -> Vehicle:
     existing = db.get(Vehicle, payload.license_plate)
@@ -53,3 +58,15 @@ def update_vehicle(
     db.commit()
     db.refresh(vehicle)
     return vehicle
+
+
+@router.delete("/{license_plate}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_vehicle(license_plate: str, db: Session = Depends(get_db)) -> None:
+    vehicle = db.get(Vehicle, license_plate)
+    if not vehicle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Vehicle with license plate '{license_plate}' not found",
+        )
+    db.delete(vehicle)
+    db.commit()
