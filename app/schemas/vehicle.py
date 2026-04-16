@@ -1,15 +1,8 @@
 import re
-from datetime import datetime
-from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator
 
-
-class VehicleStatus(str, Enum):
-    IN_INSPECTION = "in_inspection"
-    WAITING_PARTS = "waiting_parts"
-    IN_PROGRESS = "in_progress"
-    READY = "ready"
+from app.enums import VehicleStatus
 
 
 def _validate_plate(v: str) -> str:
@@ -40,7 +33,7 @@ class VehicleCreate(BaseModel):
     customer_name: str
     phone_number: str
     status: VehicleStatus = VehicleStatus.IN_INSPECTION
-    estimated_completion: datetime | None = None
+    estimated_completion: AwareDatetime | None = None
 
     @field_validator("license_plate")
     @classmethod
@@ -62,17 +55,28 @@ class VehicleUpdate(BaseModel):
     customer_name: str | None = None
     phone_number: str | None = None
     status: VehicleStatus | None = None
-    estimated_completion: datetime | None = None
+    estimated_completion: AwareDatetime | None = None
 
     @field_validator("customer_name")
     @classmethod
     def validate_customer_name(cls, v: str | None) -> str | None:
-        return _validate_name(v) if v is not None else None
+        if v is None:
+            raise ValueError("Customer name cannot be set to null")
+        return _validate_name(v)
 
     @field_validator("phone_number")
     @classmethod
     def validate_phone_number(cls, v: str | None) -> str | None:
-        return _validate_phone(v) if v is not None else None
+        if v is None:
+            raise ValueError("Phone number cannot be set to null")
+        return _validate_phone(v)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: VehicleStatus | None) -> VehicleStatus | None:
+        if v is None:
+            raise ValueError("Status cannot be set to null")
+        return v
 
 
 class VehicleResponse(BaseModel):
@@ -82,6 +86,6 @@ class VehicleResponse(BaseModel):
     customer_name: str
     phone_number: str
     status: VehicleStatus
-    estimated_completion: datetime | None
-    created_at: datetime
-    updated_at: datetime | None
+    estimated_completion: AwareDatetime | None
+    created_at: AwareDatetime
+    updated_at: AwareDatetime

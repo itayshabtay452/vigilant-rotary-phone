@@ -1,16 +1,36 @@
-from fastapi import APIRouter, Depends, HTTPException, status  # pyright: ignore[reportMissingImports]
+from fastapi import APIRouter, Depends, HTTPException, Query, status  # pyright: ignore[reportMissingImports]
 from sqlalchemy.orm import Session  # pyright: ignore[reportMissingImports]
 
 from app.database import get_db
+from app.dependencies import verify_api_key
 from app.models.vehicle import Vehicle
 from app.schemas.vehicle import VehicleCreate, VehicleResponse, VehicleUpdate
 
-router = APIRouter(prefix="/vehicles", tags=["vehicles"])
+
+def _normalize_plate(plate: str) -> str:
+    return plate.strip().upper()
+
+
+router = APIRouter(
+    prefix="/vehicles",
+    tags=["vehicles"],
+    dependencies=[Depends(verify_api_key)],
+)
 
 
 @router.get("/", response_model=list[VehicleResponse])
-def list_vehicles(db: Session = Depends(get_db)) -> list[Vehicle]:
-    return db.query(Vehicle).order_by(Vehicle.created_at.desc()).all()
+def list_vehicles(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+) -> list[Vehicle]:
+    return (
+        db.query(Vehicle)
+        .order_by(Vehicle.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.post("/", response_model=VehicleResponse, status_code=status.HTTP_201_CREATED)
@@ -31,7 +51,7 @@ def create_vehicle(payload: VehicleCreate, db: Session = Depends(get_db)) -> Veh
 
 @router.get("/{license_plate}", response_model=VehicleResponse)
 def get_vehicle(license_plate: str, db: Session = Depends(get_db)) -> Vehicle:
-    vehicle = db.get(Vehicle, license_plate)
+    vehicle = db.get(Vehicle, _normalize_plate(license_plate))
     if not vehicle:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -44,7 +64,7 @@ def get_vehicle(license_plate: str, db: Session = Depends(get_db)) -> Vehicle:
 def update_vehicle(
     license_plate: str, payload: VehicleUpdate, db: Session = Depends(get_db)
 ) -> Vehicle:
-    vehicle = db.get(Vehicle, license_plate)
+    vehicle = db.get(Vehicle, _normalize_plate(license_plate))
     if not vehicle:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -62,7 +82,7 @@ def update_vehicle(
 
 @router.delete("/{license_plate}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_vehicle(license_plate: str, db: Session = Depends(get_db)) -> None:
-    vehicle = db.get(Vehicle, license_plate)
+    vehicle = db.get(Vehicle, _normalize_plate(license_plate))
     if not vehicle:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
