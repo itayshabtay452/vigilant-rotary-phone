@@ -67,10 +67,32 @@ let openDropdownId = null;
 
 // ── API helpers ────────────────────────────────────────────────────────────────
 async function apiFetch(path, options = {}) {
-  const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
+  const send = () => {
+    const apiKey = sessionStorage.getItem('apiKey');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(apiKey ? { 'X-API-Key': apiKey } : {}),
+      ...(options.headers || {}),
+    };
+    return fetch(path, { ...options, headers });
+  };
+
+  let res = await send();
+
+  // Prompt for a key on 401 and retry. Loop so a wrong key can be corrected
+  // without the user re-triggering the action.
+  let hadKey = !!sessionStorage.getItem('apiKey');
+  while (res.status === 401) {
+    sessionStorage.removeItem('apiKey');
+    const key = await promptApiKey(hadKey ? 'That key was rejected. Please try again.' : '');
+    if (!key) {
+      throw new Error('API key required');
+    }
+    sessionStorage.setItem('apiKey', key);
+    hadKey = true;
+    res = await send();
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `Request failed (${res.status})`);
@@ -87,6 +109,51 @@ const api = {
 };
 
 function enc(plate) { return encodeURIComponent(plate); }
+
+// ── API key prompt ─────────────────────────────────────────────────────────────
+// A single pending prompt is shared across concurrent apiFetch calls so we only
+// ever show one modal at a time; every waiter resolves with the same key.
+let pendingKeyPromise = null;
+let pendingKeyResolve = null;
+
+function promptApiKey(errorMsg = '') {
+  if (pendingKeyPromise) {
+    if (errorMsg) setApiKeyError(errorMsg);
+    return pendingKeyPromise;
+  }
+
+  const overlay = document.getElementById('apikey-overlay');
+  const card    = document.getElementById('apikey-card');
+  const input   = document.getElementById('apikey-input');
+  const submit  = document.getElementById('btn-apikey-submit');
+
+  input.value = '';
+  submit.disabled    = false;
+  submit.textContent = 'Unlock';
+  setApiKeyError(errorMsg);
+
+  resetAnimation(card);
+  overlay.classList.remove('hidden');
+  setTimeout(() => input.focus(), 50);
+
+  pendingKeyPromise = new Promise(resolve => { pendingKeyResolve = resolve; });
+  return pendingKeyPromise;
+}
+
+function resolveApiKeyPrompt(value) {
+  document.getElementById('apikey-overlay').classList.add('hidden');
+  setApiKeyError('');
+  const resolve = pendingKeyResolve;
+  pendingKeyResolve = null;
+  pendingKeyPromise = null;
+  if (resolve) resolve(value);
+}
+
+function setApiKeyError(msg) {
+  const box = document.getElementById('apikey-error');
+  document.getElementById('apikey-error-msg').textContent = msg || '';
+  box.classList.toggle('hidden', !msg);
+}
 
 // ── Load ───────────────────────────────────────────────────────────────────────
 async function loadVehicles() {
@@ -311,8 +378,20 @@ function openModal(plate = null) {
     fPlate.disabled = false;
   }
 
+  resetAnimation(document.getElementById('modal-card'));
   document.getElementById('modal-overlay').classList.remove('hidden');
   setTimeout(() => (isEdit ? document.getElementById('f-name') : fPlate).focus(), 50);
+}
+
+// Restart a CSS keyframe animation by clearing it, forcing a reflow, and
+// reapplying the class' declared animation. Without this, `modalIn` only plays
+// the first time the element becomes visible.
+function resetAnimation(el) {
+  if (!el) return;
+  el.style.animation = 'none';
+  // eslint-disable-next-line no-unused-expressions
+  el.offsetHeight;
+  el.style.animation = '';
 }
 
 function closeModal() {
@@ -489,8 +568,28 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
 });
 
+document.getElementById('apikey-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const value = document.getElementById('apikey-input').value.trim();
+  if (!value) {
+    setApiKeyError('Please enter a key.');
+    return;
+  }
+  resolveApiKeyPrompt(value);
+});
+
+document.getElementById('btn-apikey-cancel').addEventListener('click', () => {
+  resolveApiKeyPrompt(null);
+});
+
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModal();
+  if (e.key !== 'Escape') return;
+  const apikeyOpen = !document.getElementById('apikey-overlay').classList.contains('hidden');
+  if (apikeyOpen) {
+    resolveApiKeyPrompt(null);
+    return;
+  }
+  closeModal();
 });
 
 document.getElementById('search').addEventListener('input', e => {
