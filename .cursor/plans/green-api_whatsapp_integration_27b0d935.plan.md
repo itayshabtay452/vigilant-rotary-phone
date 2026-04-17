@@ -12,10 +12,10 @@ todos:
     content: Create app/whatsapp/client.py with async GreenApiClient.send_message using httpx (with timeout, single retry, WHATSAPP_ENABLED kill-switch)
     status: pending
   - id: whatsapp-formatting
-    content: Create app/whatsapp/formatting.py mapping VehicleStatus to customer-facing copy and composing the reply template
+    content: Create app/whatsapp/formatting.py mapping the six current VehicleStatus values (ticket_opened, mechanics, in_test, washing, ready_for_payment, ready) to customer-facing copy and composing the reply template (no estimated_completion line)
     status: pending
   - id: whatsapp-service
-    content: Create app/whatsapp/service.py with handle_incoming_message(chat_id, text, db) using plate normalization and returning the reply string plus skip-flag for groups/non-text
+    content: Create app/whatsapp/service.py with handle_incoming_message(chat_id, text, db); strip all non-digit chars and validate against ^\d{7,8}$ before querying; return skip-flag for groups/non-text and invalid-format reply otherwise
     status: pending
   - id: webhook-router
     content: Create app/routers/whatsapp.py exposing POST /webhooks/whatsapp with Bearer-token verification, idMessage dedupe LRU, and BackgroundTasks for the outbound reply
@@ -28,7 +28,6 @@ todos:
     status: pending
 isProject: false
 ---
-
 
 # Green-API WhatsApp Integration
 
@@ -77,6 +76,7 @@ app/
 ```
 
 Why this split:
+
 - `schemas.py` isolates Green-API's payload shape so we only parse what we need and tolerate unknown fields
 - `client.py` is the only file that talks HTTP to Green-API. If we ever swap to Meta/Twilio, only this file changes
 - `service.py` has no FastAPI / HTTP dependencies, making it trivial to unit-test with an in-memory SQLite like [tests/conftest.py](tests/conftest.py) already does
@@ -107,6 +107,7 @@ Relevant shape (fields we consume are in bold in our Pydantic model; everything 
 ```
 
 Text can arrive in two shapes depending on whether WhatsApp detected a URL / quote:
+
 - `typeMessage == "textMessage"` → `messageData.textMessageData.textMessage`
 - `typeMessage == "extendedTextMessage"` → `messageData.extendedTextMessageData.text`
 
@@ -121,7 +122,7 @@ New router `app/routers/whatsapp.py`, included from [app/main.py](app/main.py):
 - `POST /webhooks/whatsapp` - receives Green-API notifications
   - **Not** behind `verify_api_key`. Green-API doesn't know our `X-API-Key`. Instead we add a dedicated `verify_green_api_token` dependency that compares the `Authorization: Bearer ...` header to `GREEN_API_WEBHOOK_TOKEN` in constant time (`hmac.compare_digest`).
   - Returns `200 OK` as fast as possible on every valid-auth call, even for payloads we don't act on. Green-API retries on non-2xx, which would cause duplicate replies.
-  - Delegates to `service.handle_incoming_message(...)` which: normalises the text to a plate (`strip().upper()`, reusing the same rule as [`_normalize_plate`](app/routers/vehicles.py)), queries the DB via `db.get(Vehicle, plate)`, and returns a reply string.
+  - Delegates to `service.handle_incoming_message(...)` which: normalises the inbound text to a plate (see plate normalization below), validates it against `^\d{7,8}$`, queries the DB via `db.get(Vehicle, plate)`, and returns a reply string.
   - The outbound `sendMessage` call is fired **after** we've committed nothing and before returning. To keep the webhook fast and resilient to Green-API latency, we dispatch it via FastAPI `BackgroundTasks` so the HTTP 200 doesn't wait on the outbound request.
   - Idempotency: keep an in-memory LRU (`functools.lru_cache`-style dict capped at ~1000 entries) of recently seen `idMessage` values. If Green-API retries the same message, we short-circuit and return 200 without re-sending.
 
@@ -149,41 +150,46 @@ sequenceDiagram
     W->>C: reply
 ```
 
+
+
 ## Reply formatting (examples)
 
-`formatting.py` maps `VehicleStatus` from [app/enums.py](app/enums.py) to human copy. For the MVP we'll use English; Hebrew can be added later by the same module:
+`formatting.py` maps the current `VehicleStatus` from [app/enums.py](app/enums.py) to customer-facing copy. The enum now has six values (`ticket_opened`, `mechanics`, `in_test`, `washing`, `ready_for_payment`, `ready`) and `estimated_completion` has been removed from the model ([app/models/vehicle.py](app/models/vehicle.py)), so there is no time estimate to surface.
 
-- `IN_INSPECTION` → "Your vehicle is currently being inspected."
-- `WAITING_PARTS` → "We're waiting for parts to arrive."
-- `IN_PROGRESS` → "Work is in progress on your vehicle."
-- `READY` → "Great news! Your vehicle is ready for pickup."
+Status → message map (MVP English; Hebrew can be swapped in later from the same module):
 
-Template:
+- `ticket_opened` → "We've opened a service ticket for your vehicle. We'll keep you posted."
+- `mechanics` → "Our mechanics are working on your vehicle right now."
+- `in_test` → "Your vehicle is being road-tested to verify the repair."
+- `washing` → "Your vehicle is being washed — the last step before pickup."
+- `ready_for_payment` → "Your vehicle is ready. Please settle payment so we can hand it over."
+- `ready` → "Great news! Your vehicle is ready for pickup."
+
+Template (no `estimated_line`, no timezone handling):
 
 ```
 Hi {customer_name},
 Status for plate {license_plate}: {status_copy}
-{estimated_line}
 — Garage
 ```
 
-`estimated_line` is included only when `estimated_completion` is set, formatted in the garage's local TZ.
+The map lives in a single `STATUS_MESSAGES: dict[VehicleStatus, str]` constant and `format_vehicle_status(vehicle)` uses it; any unknown enum value falls back to a generic "Your vehicle is currently in our care" string so a future enum addition can't crash the reply path.
 
 ## Edge cases to handle
 
 - **Invalid/missing webhook token** → 401, log warning, do not leak which field failed.
 - **Non-JSON or malformed body** → 422, logged; Green-API will retry but our dedupe cache will still no-op on repeats.
-- **`typeWebhook` other than `incomingMessageReceived`** (outgoing, status, stateInstance, etc.) → 200 OK, no DB hit, no reply. Critical because Green-API sends many webhook types through the same URL.
+- `**typeWebhook` other than `incomingMessageReceived`** (outgoing, status, stateInstance, etc.) → 200 OK, no DB hit, no reply. Critical because Green-API sends many webhook types through the same URL.
 - **Non-text message** (image, audio, location…) → reply: "Please send your license plate as a text message."
 - **Empty/whitespace-only text** → same fallback.
 - **Plate not found in DB** → reply: "We couldn't find a vehicle with plate {plate}. Please double-check and try again, or call us." Never leak other customers' data.
-- **Plate normalization**: Israeli plates come in many formats (`12-345-67`, `1234567`, `123 45 67`). Strip all non-alphanumerics and uppercase before the lookup. Store plates in the DB using the same normalization going forward (already mostly true via [`_normalize_plate`](app/routers/vehicles.py)). Document that lookups compare canonical form.
+- **Plate normalization**: Israeli plates come in many formats (`12-345-67`, `1234567`, `123 45 67`, `12 345 678`). In `app/whatsapp/service.py` we strip **all non-digit characters** (`re.sub(r"\D", "", text)`) before the DB lookup, matching the new strict `^\d{7,8}$` rule enforced server-side. If the normalised result doesn't match that regex (too short, too long, or empty), we reply with an "invalid license plate format" fallback instead of querying the DB. The DB uses the same canonical digits-only form as the primary key.
+- **Invalid plate format** (normalised length ≠ 7 or 8 digits) → reply: "That doesn't look like a valid license plate. Please send 7 or 8 digits, e.g. `1234567`." No DB hit.
 - **Phone number mismatch**: a customer might message from a different number than the one in `Vehicle.phone_number`. MVP: reply based on plate alone (plate is the search key). Log a warning when `senderData.chatId` doesn't match the stored number so ops can catch impersonation if it ever matters.
 - **Group chats**: `chatId` ending in `@g.us` instead of `@c.us` → ignore, do not reply (avoids spamming groups).
 - **Duplicate delivery** from Green-API retries → in-memory `idMessage` dedupe LRU.
 - **Green-API outage / non-2xx on `sendMessage`** → `GreenApiClient` logs, retries once with short backoff, then gives up. We've already 200'd the webhook, so no retry storm.
-- **`WHATSAPP_ENABLED=false`** → `/webhooks/whatsapp` still returns 200 (so the webhook can be registered), but silently drops the message. `GreenApiClient.send_message` becomes a no-op that logs. Useful for CI/test environments.
-- **Timezone** on `estimated_completion`: the DB stores UTC ([app/models/vehicle.py](app/models/vehicle.py) `_UTCDateTime`). Format it for display using a `GARAGE_TIMEZONE` env (default `Asia/Jerusalem`) via `zoneinfo`.
+- `**WHATSAPP_ENABLED=false**` → `/webhooks/whatsapp` still returns 200 (so the webhook can be registered), but silently drops the message. `GreenApiClient.send_message` becomes a no-op that logs. Useful for CI/test environments.
 - **Very long text** (Green-API caps at 20,000 chars) - not a concern since our replies are short, but we'll clamp defensively.
 - **Unicode/RTL** (Hebrew customer names) - use `ensure_ascii=False` and UTF-8 throughout; httpx handles this natively.
 
@@ -202,3 +208,4 @@ Add `tests/test_whatsapp.py` mirroring the style of `tests/test_vehicles.py`:
 3. In Green-API console → Notifications → set webhook URL to `https://<host>/webhooks/whatsapp` and set the Authorization token to match `GREEN_API_WEBHOOK_TOKEN`.
 4. Enable only `incomingMessageReceived`; disable the others to reduce noise (we handle them correctly either way).
 5. Send a WhatsApp to the garage number with a seeded test plate to verify the full loop.
+

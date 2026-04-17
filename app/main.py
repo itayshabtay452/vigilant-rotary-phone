@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware  # pyright: ignore[reportMiss
 from fastapi.staticfiles import StaticFiles  # pyright: ignore[reportMissingImports]
 
 from app.database import Base, engine
-from app.routers import vehicles
+from app.routers import vehicles, whatsapp
 from app.settings import ALLOWED_ORIGINS
 
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -28,6 +28,7 @@ app.add_middleware(
 )
 
 app.include_router(vehicles.router)
+app.include_router(whatsapp.router)
 
 
 @app.get("/")
