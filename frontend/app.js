@@ -2,20 +2,30 @@
 const API_BASE = '/vehicles';
 
 const STATUS = {
-  in_inspection: {
-    label: 'In Inspection',
-    dot:   'bg-blue-500',
-    badge: 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200',
+  ticket_opened: {
+    label: 'Ticket Opened',
+    dot:   'bg-gray-500',
+    badge: 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-200',
   },
-  waiting_parts: {
-    label: 'Waiting Parts',
-    dot:   'bg-amber-500',
-    badge: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200',
-  },
-  in_progress: {
-    label: 'In Progress',
+  mechanics: {
+    label: 'Mechanics',
     dot:   'bg-orange-500',
     badge: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-200',
+  },
+  in_test: {
+    label: 'In Test',
+    dot:   'bg-purple-500',
+    badge: 'bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-200',
+  },
+  washing: {
+    label: 'Washing',
+    dot:   'bg-cyan-500',
+    badge: 'bg-cyan-50 text-cyan-700 ring-1 ring-inset ring-cyan-200',
+  },
+  ready_for_payment: {
+    label: 'Ready for Payment',
+    dot:   'bg-amber-500',
+    badge: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200',
   },
   ready: {
     label: 'Ready',
@@ -24,7 +34,14 @@ const STATUS = {
   },
 };
 
-// ── Stats cards config — waiting_parts included ────────────────────────────────
+const REASONS = {
+  annual:      'Annual',
+  accident:    'Accident',
+  bodywork:    'Bodywork',
+  diagnostics: 'Diagnostics',
+};
+
+// ── Stats cards config ─────────────────────────────────────────────────────────
 const STATS_META = [
   {
     key:   'all',
@@ -33,22 +50,28 @@ const STATS_META = [
     color: 'text-blue-600 bg-blue-50',
   },
   {
-    key:   'in_inspection',
-    label: 'In Inspection',
-    icon:  'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
-    color: 'text-blue-600 bg-blue-50',
+    key:   'ticket_opened',
+    label: 'Ticket Opened',
+    icon:  'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+    color: 'text-gray-600 bg-gray-50',
   },
   {
-    key:   'waiting_parts',
-    label: 'Waiting Parts',
-    icon:  'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
-    color: 'text-amber-600 bg-amber-50',
-  },
-  {
-    key:   'in_progress',
-    label: 'In Progress',
-    icon:  'M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z',
+    key:   'mechanics',
+    label: 'Mechanics',
+    icon:  'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
     color: 'text-orange-600 bg-orange-50',
+  },
+  {
+    key:   'in_test',
+    label: 'In Test',
+    icon:  'M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h9a2 2 0 002-2z',
+    color: 'text-purple-600 bg-purple-50',
+  },
+  {
+    key:   'ready_for_payment',
+    label: 'Ready for Payment',
+    icon:  'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
+    color: 'text-amber-600 bg-amber-50',
   },
   {
     key:   'ready',
@@ -259,12 +282,10 @@ function renderTable() {
 }
 
 function renderRow(v) {
-  const sc    = STATUS[v.status] || STATUS.in_inspection;
+  const sc    = STATUS[v.status] || STATUS.ticket_opened;
   const plate = v.license_plate;
 
-  const completion = v.estimated_completion
-    ? fmtDate(v.estimated_completion, { day: '2-digit', month: 'short', year: 'numeric' })
-    : '—';
+  const reason = REASONS[v.reason] || '—';
   const added = fmtDate(v.created_at, { day: '2-digit', month: 'short', year: '2-digit' });
 
   // All onclick attributes use single-quoted HTML attribute delimiters so that the
@@ -303,7 +324,7 @@ function renderRow(v) {
           </div>
         </div>
       </td>
-      <td class="px-5 py-3.5 text-gray-500 text-sm">${esc(completion)}</td>
+      <td class="px-5 py-3.5 text-gray-600 text-sm">${esc(reason)}</td>
       <td class="px-5 py-3.5 text-gray-400 text-xs">${esc(added)}</td>
       <td class="px-5 py-3.5">
         <button onclick='openModal(${q(plate)})'
@@ -366,15 +387,15 @@ function openModal(plate = null) {
   if (isEdit) {
     const v = vehicles.find(x => x.license_plate === plate);
     if (!v) return;
-    fPlate.value                                   = v.license_plate;
-    document.getElementById('f-name').value        = v.customer_name;
-    document.getElementById('f-phone').value       = v.phone_number;
-    document.getElementById('f-status').value      = v.status;
-    document.getElementById('f-completion').value  = v.estimated_completion
-      ? v.estimated_completion.slice(0, 16)
-      : '';
+    fPlate.value                              = v.license_plate;
+    document.getElementById('f-name').value   = v.customer_name;
+    document.getElementById('f-phone').value  = v.phone_number;
+    document.getElementById('f-status').value = v.status;
+    document.getElementById('f-reason').value = v.reason;
   } else {
     document.getElementById('vehicle-form').reset();
+    document.getElementById('f-status').value = 'ticket_opened';
+    document.getElementById('f-reason').value = 'annual';
     fPlate.disabled = false;
   }
 
@@ -400,24 +421,25 @@ function closeModal() {
 }
 
 // ── Form validation ────────────────────────────────────────────────────────────
-function validateForm(plate, name, phone, completion, isNew) {
+function validateForm(plate, name, phone, reason, isNew) {
   if (isNew) {
     if (!plate) return 'License plate is required.';
     const stripped = plate.replace(/[\s\-]/g, '');
-    if (!/^[A-Z0-9]{5,10}$/.test(stripped))
-      return 'License plate must be 5–10 alphanumeric characters (hyphens allowed).';
+    if (!/^\d{7,8}$/.test(stripped))
+      return 'License plate must be exactly 7 or 8 digits.';
   }
 
   if (!name) return 'Customer name is required.';
-  if (name.length < 2) return 'Customer name must be at least 2 characters.';
+  if (!/^[A-Za-z\u0590-\u05FF]+ [A-Za-z\u0590-\u05FF]+$/.test(name))
+    return 'Customer name must be exactly two words (Hebrew or English letters) separated by a single space.';
 
   if (!phone) return 'Phone number is required.';
-  const digits = phone.replace(/[\s\-\+\(\)]/g, '');
-  if (!/^\d{9,15}$/.test(digits))
-    return 'Phone must be 9–15 digits (e.g. +972501234567 or 0501234567).';
+  const digits = phone.replace(/[\s\-]/g, '');
+  if (!/^05[023458]\d{7}$/.test(digits))
+    return "Phone must be exactly 10 digits, start with '05', and the 3rd digit must be 0, 2, 3, 4, 5, or 8.";
 
-  if (completion && new Date(completion) <= new Date())
-    return 'Estimated completion must be a future date and time.';
+  if (!reason || !Object.prototype.hasOwnProperty.call(REASONS, reason))
+    return 'Please select a valid reason.';
 
   return null;
 }
@@ -426,20 +448,22 @@ async function handleFormSubmit(e) {
   e.preventDefault();
   clearFormError();
 
-  const plate      = document.getElementById('f-plate').value.trim().toUpperCase();
-  const name       = document.getElementById('f-name').value.trim();
-  const phone      = document.getElementById('f-phone').value.trim();
-  const status     = document.getElementById('f-status').value;
-  const completion = document.getElementById('f-completion').value;
+  const plateRaw = document.getElementById('f-plate').value.trim();
+  const plate    = plateRaw.replace(/[\s\-]/g, '');
+  const name     = document.getElementById('f-name').value.trim();
+  const phoneRaw = document.getElementById('f-phone').value.trim();
+  const phone    = phoneRaw.replace(/[\s\-]/g, '');
+  const status   = document.getElementById('f-status').value;
+  const reason   = document.getElementById('f-reason').value;
 
-  const error = validateForm(plate, name, phone, completion, !editingPlate);
+  const error = validateForm(plate, name, phone, reason, !editingPlate);
   if (error) { showFormError(error); return; }
 
   const payload = {
-    customer_name:        name,
-    phone_number:         phone,
+    customer_name: name,
+    phone_number:  phone,
     status,
-    estimated_completion: completion ? new Date(completion).toISOString() : null,
+    reason,
   };
 
   const isEdit = !!editingPlate;

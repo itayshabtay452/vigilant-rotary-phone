@@ -5,7 +5,7 @@ from sqlalchemy import types  # pyright: ignore[reportMissingImports]
 from sqlalchemy.orm import Mapped, mapped_column  # pyright: ignore[reportMissingImports]
 
 from app.database import Base
-from app.enums import VehicleStatus
+from app.enums import TreatmentReason, VehicleStatus
 
 
 class _UTCDateTime(types.TypeDecorator):  # type: ignore[type-arg]
@@ -45,10 +45,10 @@ class Vehicle(Base):
     customer_name: Mapped[str] = mapped_column(String, nullable=False)
     phone_number: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[VehicleStatus] = mapped_column(
-        Enum(VehicleStatus), default=VehicleStatus.IN_INSPECTION, nullable=False
+        Enum(VehicleStatus), default=VehicleStatus.ticket_opened, nullable=False
     )
-    estimated_completion: Mapped[datetime | None] = mapped_column(
-        _UTCDateTime(), nullable=True
+    reason: Mapped[TreatmentReason] = mapped_column(
+        Enum(TreatmentReason), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         _UTCDateTime(), default=_utc_now, nullable=False

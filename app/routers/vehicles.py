@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status  # pyright: ignore[reportMissingImports]
 from sqlalchemy.orm import Session  # pyright: ignore[reportMissingImports]
 
@@ -8,7 +10,10 @@ from app.schemas.vehicle import VehicleCreate, VehicleResponse, VehicleUpdate
 
 
 def _normalize_plate(plate: str) -> str:
-    return plate.strip().upper()
+    # Must mirror VehicleCreate._validate_plate: strip surrounding whitespace
+    # and remove any embedded spaces/hyphens so URL lookups match the
+    # digits-only key that was persisted at create time.
+    return re.sub(r"[\s\-]", "", plate.strip())
 
 
 router = APIRouter(

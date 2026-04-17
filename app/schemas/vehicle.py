@@ -2,38 +2,45 @@ import re
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator
 
-from app.enums import VehicleStatus
+from app.enums import TreatmentReason, VehicleStatus
+
+
+_PHONE_RE = re.compile(r"^05[023458]\d{7}$")
+_NAME_RE = re.compile(r"^[A-Za-z\u0590-\u05FF]+ [A-Za-z\u0590-\u05FF]+$")
+_PLATE_RE = re.compile(r"^\d{7,8}$")
 
 
 def _validate_plate(v: str) -> str:
-    v = v.strip().upper()
-    stripped = re.sub(r"[\s\-]", "", v)
-    if not re.match(r"^[A-Z0-9]{5,10}$", stripped):
-        raise ValueError("License plate must be 5–10 alphanumeric characters (hyphens allowed)")
-    return v
+    stripped = re.sub(r"[\s\-]", "", v.strip())
+    if not _PLATE_RE.match(stripped):
+        raise ValueError("License plate must be exactly 7 or 8 digits")
+    return stripped
 
 
 def _validate_name(v: str) -> str:
     v = v.strip()
-    if len(v) < 2:
-        raise ValueError("Customer name must be at least 2 characters")
+    if not _NAME_RE.match(v):
+        raise ValueError(
+            "Customer name must be exactly two words (Hebrew or English letters) separated by a single space"
+        )
     return v
 
 
 def _validate_phone(v: str) -> str:
-    v = v.strip()
-    digits = re.sub(r"[\s\-\+\(\)]", "", v)
-    if not re.match(r"^\d{9,15}$", digits):
-        raise ValueError("Phone number must be 9–15 digits (e.g. +972501234567 or 0501234567)")
-    return v
+    digits = re.sub(r"[\s\-]", "", v.strip())
+    if not _PHONE_RE.match(digits):
+        raise ValueError(
+            "Phone must be exactly 10 digits, start with '05', and the 3rd digit must be 0/2/3/4/5/8"
+        )
+    return digits
 
 
 class VehicleCreate(BaseModel):
     license_plate: str
     customer_name: str
     phone_number: str
-    status: VehicleStatus = VehicleStatus.IN_INSPECTION
-    estimated_completion: AwareDatetime | None = None
+    reason: TreatmentReason
+    status: VehicleStatus = VehicleStatus.ticket_opened
 
     @field_validator("license_plate")
     @classmethod
@@ -55,7 +62,7 @@ class VehicleUpdate(BaseModel):
     customer_name: str | None = None
     phone_number: str | None = None
     status: VehicleStatus | None = None
-    estimated_completion: AwareDatetime | None = None
+    reason: TreatmentReason | None = None
 
     @field_validator("customer_name")
     @classmethod
@@ -78,6 +85,13 @@ class VehicleUpdate(BaseModel):
             raise ValueError("Status cannot be set to null")
         return v
 
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, v: TreatmentReason | None) -> TreatmentReason | None:
+        if v is None:
+            raise ValueError("Reason cannot be set to null")
+        return v
+
 
 class VehicleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -86,6 +100,6 @@ class VehicleResponse(BaseModel):
     customer_name: str
     phone_number: str
     status: VehicleStatus
-    estimated_completion: AwareDatetime | None
+    reason: TreatmentReason
     created_at: AwareDatetime
     updated_at: AwareDatetime

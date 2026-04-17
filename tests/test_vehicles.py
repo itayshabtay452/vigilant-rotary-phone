@@ -4,9 +4,6 @@ Tests for the /vehicles/ router.
 Covers: CRUD happy paths, input validation, pagination bounds,
 plate-normalisation lookup, auth enforcement, and explicit-null rejection.
 """
-import os
-from datetime import datetime
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -14,14 +11,13 @@ from fastapi.testclient import TestClient
 # Helpers
 # ---------------------------------------------------------------------------
 
-_VALID_PLATE = "ABC-123"
+_VALID_PLATE = "1234567"
 _VALID_PAYLOAD: dict = {
     "license_plate": _VALID_PLATE,
     "customer_name": "Jane Doe",
     "phone_number": "0501234567",
+    "reason": "annual",
 }
-_AWARE_DT = "2026-06-01T09:00:00Z"
-_NAIVE_DT = "2026-06-01T09:00:00"
 
 
 def _create(client: TestClient, overrides: dict | None = None) -> dict:
@@ -39,15 +35,32 @@ def _create(client: TestClient, overrides: dict | None = None) -> dict:
 def test_create_vehicle(client: TestClient) -> None:
     data = _create(client)
     assert data["license_plate"] == _VALID_PLATE
-    assert data["status"] == "in_inspection"
+    assert data["status"] == "ticket_opened"
+    assert data["reason"] == "annual"
     assert data["customer_name"] == "Jane Doe"
     assert "created_at" in data
     assert "updated_at" in data
 
 
-def test_create_vehicle_with_aware_estimated_completion(client: TestClient) -> None:
-    data = _create(client, {"estimated_completion": _AWARE_DT})
-    assert data["estimated_completion"] is not None
+def test_create_vehicle_with_eight_digit_plate(client: TestClient) -> None:
+    data = _create(client, {"license_plate": "12345678"})
+    assert data["license_plate"] == "12345678"
+
+
+def test_create_vehicle_strips_plate_separators(client: TestClient) -> None:
+    data = _create(client, {"license_plate": "123-45-67"})
+    assert data["license_plate"] == "1234567"
+
+
+def test_create_duplicate_across_hyphenated_variants_returns_409(client: TestClient) -> None:
+    """Two plate inputs that differ only in embedded hyphens/spaces must
+    collide on the same primary key, so the second create returns 409."""
+    _create(client, {"license_plate": "1234567"})
+    r = client.post(
+        "/vehicles/",
+        json={**_VALID_PAYLOAD, "license_plate": "123-45-67"},
+    )
+    assert r.status_code == 409
 
 
 def test_list_vehicles(client: TestClient) -> None:
@@ -71,6 +84,13 @@ def test_update_vehicle(client: TestClient) -> None:
     assert r.json()["customer_name"] == "John Smith"
 
 
+def test_update_vehicle_reason(client: TestClient) -> None:
+    _create(client)
+    r = client.patch(f"/vehicles/{_VALID_PLATE}", json={"reason": "accident"})
+    assert r.status_code == 200
+    assert r.json()["reason"] == "accident"
+
+
 def test_delete_vehicle(client: TestClient) -> None:
     _create(client)
     r = client.delete(f"/vehicles/{_VALID_PLATE}")
@@ -88,10 +108,10 @@ def test_get_vehicle_case_insensitive(client: TestClient) -> None:
     assert client.get(f"/vehicles/{_VALID_PLATE.lower()}").status_code == 200
 
 
-def test_patch_vehicle_case_insensitive(client: TestClient) -> None:
+def test_patch_vehicle_status_ready(client: TestClient) -> None:
     _create(client)
     r = client.patch(
-        f"/vehicles/{_VALID_PLATE.lower()}", json={"status": "ready"}
+        f"/vehicles/{_VALID_PLATE}", json={"status": "ready"}
     )
     assert r.status_code == 200
 
@@ -99,6 +119,32 @@ def test_patch_vehicle_case_insensitive(client: TestClient) -> None:
 def test_delete_vehicle_case_insensitive(client: TestClient) -> None:
     _create(client)
     assert client.delete(f"/vehicles/{_VALID_PLATE.lower()}").status_code == 204
+
+
+# ===========================================================================
+# URL plate normalisation — path must strip the same separators as the body
+# ===========================================================================
+
+
+def test_get_vehicle_hyphenated_url(client: TestClient) -> None:
+    _create(client, {"license_plate": "1234567"})
+    r = client.get("/vehicles/123-45-67")
+    assert r.status_code == 200
+    assert r.json()["license_plate"] == "1234567"
+
+
+def test_patch_vehicle_hyphenated_url(client: TestClient) -> None:
+    _create(client, {"license_plate": "1234567"})
+    r = client.patch("/vehicles/123-45-67", json={"status": "ready"})
+    assert r.status_code == 200
+    assert r.json()["status"] == "ready"
+
+
+def test_delete_vehicle_hyphenated_url(client: TestClient) -> None:
+    _create(client, {"license_plate": "1234567"})
+    r = client.delete("/vehicles/123-45-67")
+    assert r.status_code == 204
+    assert client.get("/vehicles/1234567").status_code == 404
 
 
 # ===========================================================================
@@ -113,15 +159,15 @@ def test_create_duplicate_returns_409(client: TestClient) -> None:
 
 
 def test_get_not_found(client: TestClient) -> None:
-    assert client.get("/vehicles/NOTREAL").status_code == 404
+    assert client.get("/vehicles/9999999").status_code == 404
 
 
 def test_patch_not_found(client: TestClient) -> None:
-    assert client.patch("/vehicles/NOTREAL", json={"status": "ready"}).status_code == 404
+    assert client.patch("/vehicles/9999999", json={"status": "ready"}).status_code == 404
 
 
 def test_delete_not_found(client: TestClient) -> None:
-    assert client.delete("/vehicles/NOTREAL").status_code == 404
+    assert client.delete("/vehicles/9999999").status_code == 404
 
 
 # ===========================================================================
@@ -132,11 +178,17 @@ def test_delete_not_found(client: TestClient) -> None:
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("license_plate", "AB"),          # too short
-        ("license_plate", "A" * 11),      # too long
-        ("customer_name", "X"),           # too short
-        ("phone_number", "123"),          # too short
-        ("phone_number", "abcdefghij"),   # non-digit
+        ("license_plate", "ABC1234"),      # letters not allowed
+        ("license_plate", "123456"),       # too short (6 digits)
+        ("license_plate", "123456789"),    # too long (9 digits)
+        ("customer_name", "Jane"),         # only one word
+        ("customer_name", "Jane123 Doe"),  # contains digits
+        ("customer_name", "Jane  Doe"),    # two spaces
+        ("phone_number", "0511234567"),    # invalid 3rd digit
+        ("phone_number", "050123456"),     # only 9 digits
+        ("phone_number", "05012345678"),   # 11 digits
+        ("phone_number", "0401234567"),    # does not start with 05
+        ("reason", "unknown"),             # not in enum
     ],
 )
 def test_create_invalid_fields(client: TestClient, field: str, value: str) -> None:
@@ -144,8 +196,8 @@ def test_create_invalid_fields(client: TestClient, field: str, value: str) -> No
     assert client.post("/vehicles/", json=payload).status_code == 422
 
 
-def test_create_naive_estimated_completion_rejected(client: TestClient) -> None:
-    payload = {**_VALID_PAYLOAD, "estimated_completion": _NAIVE_DT}
+def test_create_missing_reason_rejected(client: TestClient) -> None:
+    payload = {k: v for k, v in _VALID_PAYLOAD.items() if k != "reason"}
     assert client.post("/vehicles/", json=payload).status_code == 422
 
 
@@ -154,19 +206,11 @@ def test_create_naive_estimated_completion_rejected(client: TestClient) -> None:
 # ===========================================================================
 
 
-@pytest.mark.parametrize("field", ["customer_name", "phone_number", "status"])
+@pytest.mark.parametrize("field", ["customer_name", "phone_number", "status", "reason"])
 def test_patch_explicit_null_rejected(client: TestClient, field: str) -> None:
     _create(client)
     r = client.patch(f"/vehicles/{_VALID_PLATE}", json={field: None})
     assert r.status_code == 422, f"Expected 422 for {field}=null, got {r.status_code}"
-
-
-def test_patch_naive_estimated_completion_rejected(client: TestClient) -> None:
-    _create(client)
-    r = client.patch(
-        f"/vehicles/{_VALID_PLATE}", json={"estimated_completion": _NAIVE_DT}
-    )
-    assert r.status_code == 422
 
 
 # ===========================================================================
@@ -176,7 +220,7 @@ def test_patch_naive_estimated_completion_rejected(client: TestClient) -> None:
 
 def _create_n(client: TestClient, n: int) -> None:
     for i in range(n):
-        _create(client, {"license_plate": f"TEST{i:04d}"})
+        _create(client, {"license_plate": f"{1000000 + i}"})
 
 
 def test_list_pagination_limit(client: TestClient) -> None:
@@ -243,6 +287,8 @@ def test_auth_missing_key_rejected(client: TestClient, monkeypatch: pytest.Monke
 def test_utc_datetime_rejects_naive_bind_param() -> None:
     """_UTCDateTime.process_bind_param must refuse naive datetimes so they are
     never silently stored and later read back tagged as UTC."""
+    from datetime import datetime
+
     from app.models.vehicle import _UTCDateTime
 
     col = _UTCDateTime()
@@ -252,7 +298,7 @@ def test_utc_datetime_rejects_naive_bind_param() -> None:
 
 def test_utc_datetime_accepts_aware_bind_param() -> None:
     """Timezone-aware datetimes must be normalised to naive UTC for storage."""
-    from datetime import timezone
+    from datetime import datetime, timezone
 
     from app.models.vehicle import _UTCDateTime
 
