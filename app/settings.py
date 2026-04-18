@@ -1,5 +1,12 @@
 import os
 
+from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
+
+# Load variables from a project-root `.env` file if present. Real OS env vars
+# always take precedence (override=False), so production deployments can still
+# inject values via the platform's own secret manager without a file on disk.
+load_dotenv(override=False)
+
 ALLOWED_ORIGINS: list[str] = [
     o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()
 ]
