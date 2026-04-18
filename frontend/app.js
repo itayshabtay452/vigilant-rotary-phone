@@ -3,79 +3,79 @@ const API_BASE = '/vehicles';
 
 const STATUS = {
   ticket_opened: {
-    label: 'Ticket Opened',
+    label: 'כרטיס נפתח',
     dot:   'bg-gray-500',
     badge: 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-200',
   },
   mechanics: {
-    label: 'Mechanics',
+    label: 'אצל המוסכניק',
     dot:   'bg-orange-500',
     badge: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-200',
   },
   in_test: {
-    label: 'In Test',
+    label: 'בנסיעת מבחן',
     dot:   'bg-purple-500',
     badge: 'bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-200',
   },
   washing: {
-    label: 'Washing',
+    label: 'בשטיפה',
     dot:   'bg-cyan-500',
     badge: 'bg-cyan-50 text-cyan-700 ring-1 ring-inset ring-cyan-200',
   },
   ready_for_payment: {
-    label: 'Ready for Payment',
+    label: 'ממתין לתשלום',
     dot:   'bg-amber-500',
     badge: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200',
   },
   ready: {
-    label: 'Ready',
+    label: 'מוכן לאיסוף',
     dot:   'bg-green-500',
     badge: 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-200',
   },
 };
 
 const REASONS = {
-  annual:      'Annual',
-  accident:    'Accident',
-  bodywork:    'Bodywork',
-  diagnostics: 'Diagnostics',
+  annual:      'טיפול שנתי',
+  accident:    'תאונה',
+  bodywork:    'פחחות',
+  diagnostics: 'אבחון',
 };
 
 // ── Stats cards config ─────────────────────────────────────────────────────────
 const STATS_META = [
   {
     key:   'all',
-    label: 'Total Vehicles',
+    label: 'סה"כ רכבים',
     icon:  'M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h9a2 2 0 002-2z',
     color: 'text-blue-600 bg-blue-50',
   },
   {
     key:   'ticket_opened',
-    label: 'Ticket Opened',
+    label: STATUS.ticket_opened.label,
     icon:  'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
     color: 'text-gray-600 bg-gray-50',
   },
   {
     key:   'mechanics',
-    label: 'Mechanics',
+    label: STATUS.mechanics.label,
     icon:  'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
     color: 'text-orange-600 bg-orange-50',
   },
   {
     key:   'in_test',
-    label: 'In Test',
+    label: STATUS.in_test.label,
     icon:  'M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h9a2 2 0 002-2z',
     color: 'text-purple-600 bg-purple-50',
   },
   {
     key:   'ready_for_payment',
-    label: 'Ready for Payment',
+    label: STATUS.ready_for_payment.label,
     icon:  'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
     color: 'text-amber-600 bg-amber-50',
   },
   {
     key:   'ready',
-    label: 'Ready',
+    label: STATUS.ready.label,
     icon:  'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
     color: 'text-green-600 bg-green-50',
   },
@@ -107,9 +107,9 @@ async function apiFetch(path, options = {}) {
   let hadKey = !!sessionStorage.getItem('apiKey');
   while (res.status === 401) {
     sessionStorage.removeItem('apiKey');
-    const key = await promptApiKey(hadKey ? 'That key was rejected. Please try again.' : '');
+    const key = await promptApiKey(hadKey ? 'המפתח נדחה. נסו שוב.' : '');
     if (!key) {
-      throw new Error('API key required');
+      throw new Error('נדרש מפתח API');
     }
     sessionStorage.setItem('apiKey', key);
     hadKey = true;
@@ -117,11 +117,53 @@ async function apiFetch(path, options = {}) {
   }
 
   if (!res.ok) {
+    // Backend error `detail` is intentionally English; surface a generic
+    // Hebrew message to the user based on HTTP status, but always log the
+    // raw detail so server-side validation/regressions remain debuggable.
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `Request failed (${res.status})`);
+    if (body && body.detail) {
+      console.warn(`API ${res.status}:`, body.detail);
+    }
+    throw new Error(translateHttpError(res.status, body));
   }
   if (res.status === 204) return null;
   return res.json();
+}
+
+function translateHttpError(status, body) {
+  switch (status) {
+    case 401:
+    case 403: return 'נדרשת התחברות מחדש.';
+    case 404: return 'הרכב לא נמצא.';
+    case 409: return 'רכב עם לוחית הרישוי הזו כבר קיים במערכת.';
+    case 422: {
+      // 422 only reaches the UI when the server rejects something the
+      // frontend validator allowed. Surface the backend detail so the
+      // user sees *which* field is wrong, instead of a single generic
+      // toast that hides the real cause.
+      const detail = extractDetail(body);
+      return detail
+        ? `הנתונים שהוזנו אינם תקינים: ${detail}`
+        : 'הנתונים שהוזנו אינם תקינים.';
+    }
+    default:  return 'אירעה שגיאה. נסו שוב.';
+  }
+}
+
+// FastAPI returns `detail` as either a string (HTTPException) or a list of
+// {loc, msg, type} entries (Pydantic validation). Collapse both shapes to a
+// single short human-readable string, or null if nothing useful is present.
+function extractDetail(body) {
+  if (!body || body.detail == null) return null;
+  const d = body.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d)) {
+    return d
+      .map(e => (e && typeof e.msg === 'string' ? e.msg : null))
+      .filter(Boolean)
+      .join('; ') || null;
+  }
+  return null;
 }
 
 const api = {
@@ -152,7 +194,7 @@ function promptApiKey(errorMsg = '') {
 
   input.value = '';
   submit.disabled    = false;
-  submit.textContent = 'Unlock';
+  submit.textContent = 'כניסה';
   setApiKeyError(errorMsg);
 
   resetAnimation(card);
@@ -245,7 +287,7 @@ function renderStats() {
 
 function renderFilterTabs() {
   const tabs = [
-    { key: 'all', label: 'All' },
+    { key: 'all', label: 'הכל' },
     ...Object.entries(STATUS).map(([k, v]) => ({ key: k, label: v.label })),
   ];
 
@@ -269,11 +311,11 @@ function renderTable() {
     empty.classList.remove('hidden');
     const hasData = vehicles.length > 0;
     document.getElementById('empty-title').textContent = hasData
-      ? (searchQuery ? `No vehicles match "${searchQuery}"` : `No vehicles with status "${STATUS[activeFilter]?.label}"`)
-      : 'No vehicles yet';
+      ? (searchQuery ? `לא נמצאו רכבים התואמים ל-"${searchQuery}"` : `אין רכבים בסטטוס "${STATUS[activeFilter]?.label}"`)
+      : 'עדיין אין רכבים';
     document.getElementById('empty-sub').textContent = hasData
-      ? 'Try adjusting your search or filter.'
-      : 'Click "Add Vehicle" to get started.';
+      ? 'נסו לעדכן את החיפוש או הסינון.'
+      : 'לחצו על "הוספת רכב" כדי להתחיל.';
     return;
   }
 
@@ -300,7 +342,7 @@ function renderRow(v) {
       <td class="px-5 py-3.5">
         <div class="relative inline-block">
           <button
-            onclick='toggleDropdown(event, ${q(plate)})'
+            onclick='toggleDropdown(event, this, ${q(plate)})'
             class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
                    ${sc.badge} hover:opacity-80 transition-opacity cursor-pointer">
             <span class="w-1.5 h-1.5 rounded-full flex-shrink-0 ${sc.dot}"></span>
@@ -309,11 +351,11 @@ function renderRow(v) {
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
-          <div id="dd-${plate}" class="hidden absolute left-0 top-full mt-1 w-44
-               bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1.5 overflow-hidden">
+          <div id="dd-${plate}" class="hidden fixed w-44 max-h-[80vh] overflow-y-auto
+               bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1.5">
             ${Object.entries(STATUS).map(([k, c]) => `
               <button onclick='quickStatus(${q(plate)}, ${q(k)})'
-                class="w-full text-left flex items-center gap-2.5 px-3 py-2 text-sm
+                class="w-full text-right flex items-center gap-2.5 px-3 py-2 text-sm
                        hover:bg-gray-50 transition-colors
                        ${v.status === k ? 'text-blue-600 font-semibold bg-blue-50/50' : 'text-gray-700'}">
                 <span class="w-2 h-2 rounded-full flex-shrink-0 ${c.dot}"></span>
@@ -331,24 +373,44 @@ function renderRow(v) {
           class="opacity-0 group-hover:opacity-100 transition-opacity px-3 py-1.5 text-xs
                  font-medium text-gray-500 hover:text-blue-600 hover:bg-blue-50
                  rounded-lg transition-colors">
-          Edit
+          עריכה
         </button>
       </td>
     </tr>`;
 }
 
 // ── Status dropdown ────────────────────────────────────────────────────────────
-function toggleDropdown(e, plate) {
+// Invoked from inline onclick as `toggleDropdown(event, this, plate)`. We take
+// the button as an explicit argument instead of reading `event.currentTarget`
+// so the anchor stays valid even if a future change defers work to a microtask
+// (where `currentTarget` would already be null).
+function toggleDropdown(e, btn, plate) {
   e.stopPropagation();
   // Capture whether this exact dropdown was already open before closing it.
   const wasOpen = openDropdownId === plate;
   closeOpenDropdown();
-  if (!wasOpen) {
-    const dd = document.getElementById(`dd-${plate}`);
-    if (!dd) return;
-    dd.classList.remove('hidden');
-    openDropdownId = plate;
-  }
+  if (wasOpen) return;
+
+  const dd = document.getElementById(`dd-${plate}`);
+  if (!dd || !btn) return;
+
+  const rect = btn.getBoundingClientRect();
+  const gap  = 4;
+
+  // Show first so layout is computed; getBoundingClientRect forces a synchronous
+  // reflow, so the measured height reflects current font metrics. The CSS cap
+  // (max-h-[80vh] on the menu) means even a stale measurement during webfont
+  // load can't push the menu off-screen.
+  dd.classList.remove('hidden');
+  const ddH    = dd.getBoundingClientRect().height;
+  const flipUp = rect.bottom + gap + ddH > window.innerHeight;
+
+  // RTL: align the dropdown's right edge with the trigger's right edge.
+  dd.style.right = (window.innerWidth - rect.right) + 'px';
+  dd.style.left  = 'auto';
+  dd.style.top   = (flipUp ? rect.top - gap - ddH : rect.bottom + gap) + 'px';
+
+  openDropdownId = plate;
 }
 
 function closeOpenDropdown() {
@@ -365,7 +427,7 @@ async function quickStatus(plate, newStatus) {
     const updated = await api.update(plate, { status: newStatus });
     patchLocal(updated);
     render();
-    showToast(`Status → ${STATUS[newStatus].label}`);
+    showToast(`סטטוס עודכן ל-${STATUS[newStatus].label}`);
   } catch (e) {
     showToast(e.message, 'error');
   }
@@ -376,8 +438,8 @@ function openModal(plate = null) {
   editingPlate = plate;
   const isEdit = plate !== null;
 
-  document.getElementById('modal-title').textContent = isEdit ? 'Edit Vehicle'  : 'Add Vehicle';
-  document.getElementById('btn-submit').textContent  = isEdit ? 'Save Changes'  : 'Add Vehicle';
+  document.getElementById('modal-title').textContent = isEdit ? 'עריכת רכב'   : 'הוספת רכב';
+  document.getElementById('btn-submit').textContent  = isEdit ? 'שמירת שינויים' : 'הוסף רכב';
   document.getElementById('btn-delete').classList.toggle('hidden', !isEdit);
   clearFormError();
 
@@ -423,23 +485,23 @@ function closeModal() {
 // ── Form validation ────────────────────────────────────────────────────────────
 function validateForm(plate, name, phone, reason, isNew) {
   if (isNew) {
-    if (!plate) return 'License plate is required.';
+    if (!plate) return 'יש להזין לוחית רישוי.';
     const stripped = plate.replace(/[\s\-]/g, '');
     if (!/^\d{7,8}$/.test(stripped))
-      return 'License plate must be exactly 7 or 8 digits.';
+      return 'לוחית הרישוי חייבת להכיל 7 או 8 ספרות בלבד.';
   }
 
-  if (!name) return 'Customer name is required.';
+  if (!name) return 'יש להזין שם לקוח.';
   if (!/^[A-Za-z\u0590-\u05FF]+ [A-Za-z\u0590-\u05FF]+$/.test(name))
-    return 'Customer name must be exactly two words (Hebrew or English letters) separated by a single space.';
+    return 'שם הלקוח חייב להיות שתי מילים בלבד (אותיות בעברית או באנגלית) המופרדות ברווח אחד.';
 
-  if (!phone) return 'Phone number is required.';
+  if (!phone) return 'יש להזין מספר טלפון.';
   const digits = phone.replace(/[\s\-]/g, '');
   if (!/^05[023458]\d{7}$/.test(digits))
-    return "Phone must be exactly 10 digits, start with '05', and the 3rd digit must be 0, 2, 3, 4, 5, or 8.";
+    return 'מספר הטלפון חייב להכיל 10 ספרות, להתחיל ב-"05", והספרה השלישית חייבת להיות 0/2/3/4/5/8.';
 
   if (!reason || !Object.prototype.hasOwnProperty.call(REASONS, reason))
-    return 'Please select a valid reason.';
+    return 'יש לבחור סיבת טיפול תקינה.';
 
   return null;
 }
@@ -469,17 +531,17 @@ async function handleFormSubmit(e) {
   const isEdit = !!editingPlate;
   const btn = document.getElementById('btn-submit');
   btn.disabled    = true;
-  btn.textContent = isEdit ? 'Saving…' : 'Adding…';
+  btn.textContent = isEdit ? 'שומר…' : 'מוסיף…';
 
   try {
     if (isEdit) {
       const updated = await api.update(editingPlate, payload);
       patchLocal(updated);
-      showToast('Vehicle updated');
+      showToast('הרכב עודכן');
     } else {
       const created = await api.create({ ...payload, license_plate: plate });
       vehicles.unshift(created);
-      showToast('Vehicle added');
+      showToast('הרכב נוסף');
     }
     closeModal();
     render();
@@ -487,29 +549,29 @@ async function handleFormSubmit(e) {
     showFormError(err.message);
   } finally {
     btn.disabled    = false;
-    btn.textContent = isEdit ? 'Save Changes' : 'Add Vehicle';
+    btn.textContent = isEdit ? 'שמירת שינויים' : 'הוסף רכב';
   }
 }
 
 async function handleDelete() {
   if (!editingPlate) return;
   const plate = editingPlate;
-  if (!confirm(`Delete vehicle "${plate}"?\nThis cannot be undone.`)) return;
+  if (!confirm(`למחוק את הרכב "${plate}"?\nלא ניתן לבטל פעולה זו.`)) return;
 
   const btn = document.getElementById('btn-delete');
   btn.disabled    = true;
-  btn.textContent = 'Deleting…';
+  btn.textContent = 'מוחק…';
 
   try {
     await api.remove(plate);
     vehicles = vehicles.filter(v => v.license_plate !== plate);
     closeModal();
     render();
-    showToast('Vehicle deleted');
+    showToast('הרכב נמחק');
   } catch (err) {
     showFormError(err.message);
     btn.disabled    = false;
-    btn.textContent = 'Delete Vehicle';
+    btn.textContent = 'מחק רכב';
   }
 }
 
@@ -572,7 +634,7 @@ function esc(str) {
 function q(str) { return JSON.stringify(String(str)); }
 
 function fmtDate(iso, opts) {
-  try { return new Date(iso).toLocaleDateString('en-GB', opts); }
+  try { return new Date(iso).toLocaleDateString('he-IL', opts); }
   catch { return iso; }
 }
 
@@ -596,7 +658,7 @@ document.getElementById('apikey-form').addEventListener('submit', e => {
   e.preventDefault();
   const value = document.getElementById('apikey-input').value.trim();
   if (!value) {
-    setApiKeyError('Please enter a key.');
+    setApiKeyError('יש להזין מפתח.');
     return;
   }
   resolveApiKeyPrompt(value);
@@ -622,6 +684,13 @@ document.getElementById('search').addEventListener('input', e => {
 });
 
 document.addEventListener('click', closeOpenDropdown);
+// The dropdown is fixed-positioned, so it won't follow the row when the page
+// scrolls or the viewport resizes. Closing on those events matches native
+// <select> behavior and avoids a floating menu drifting out of place.
+// `capture: true` catches scrolls inside any nested scroll container too;
+// `passive: true` keeps mobile touch-scroll smooth.
+window.addEventListener('scroll', closeOpenDropdown, { capture: true, passive: true });
+window.addEventListener('resize', closeOpenDropdown);
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
 loadVehicles();

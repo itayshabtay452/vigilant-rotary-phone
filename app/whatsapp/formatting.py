@@ -12,23 +12,22 @@ from app.models.vehicle import Vehicle
 
 STATUS_MESSAGES: Final[dict[VehicleStatus, str]] = {
     VehicleStatus.ticket_opened: (
-        "We've opened a service ticket for your vehicle. We'll keep you posted."
+        "פתחנו עבורכם כרטיס שירות לרכב. נעדכן אתכם בהתקדמות."
     ),
-    VehicleStatus.mechanics: "Our mechanics are working on your vehicle right now.",
-    VehicleStatus.in_test: "Your vehicle is being road-tested to verify the repair.",
-    VehicleStatus.washing: "Your vehicle is being washed — the last step before pickup.",
+    VehicleStatus.mechanics: "המוסכניקים שלנו מטפלים ברכב כעת.",
+    VehicleStatus.in_test: "הרכב נמצא בנסיעת מבחן לאימות התיקון.",
+    VehicleStatus.washing: "הרכב עובר שטיפה — השלב האחרון לפני האיסוף.",
     VehicleStatus.ready_for_payment: (
-        "Your vehicle is ready. Please settle payment so we can hand it over."
+        "הרכב מוכן. נא להסדיר את התשלום כדי שנוכל למסור אותו."
     ),
-    VehicleStatus.ready: "Great news! Your vehicle is ready for pickup.",
+    VehicleStatus.ready: "בשורה טובה! הרכב מוכן לאיסוף.",
 }
 
-_GENERIC_STATUS_COPY: Final[str] = "Your vehicle is currently in our care."
+_GENERIC_STATUS_COPY: Final[str] = "הרכב נמצא כעת בטיפולנו."
 
-NON_TEXT_REPLY: Final[str] = "Please send your license plate as a text message."
+NON_TEXT_REPLY: Final[str] = "נא לשלוח את לוחית הרישוי כהודעת טקסט."
 INVALID_PLATE_REPLY: Final[str] = (
-    "That doesn't look like a valid license plate. "
-    "Please send 7 or 8 digits, e.g. 1234567."
+    "הלוחית שנשלחה אינה תקינה. נא לשלוח 7 או 8 ספרות, למשל 1234567."
 )
 
 
@@ -38,14 +37,14 @@ def status_copy(status: VehicleStatus) -> str:
 
 def format_vehicle_status(vehicle: Vehicle) -> str:
     return (
-        f"Hi {vehicle.customer_name},\n"
-        f"Status for plate {vehicle.license_plate}: {status_copy(vehicle.status)}\n"
-        "— Garage"
+        f"שלום {vehicle.customer_name},\n"
+        f"סטטוס לוחית {vehicle.license_plate}: {status_copy(vehicle.status)}\n"
+        "— המוסך"
     )
 
 
 def format_not_found(plate: str) -> str:
     return (
-        f"We couldn't find a vehicle with plate {plate}. "
-        "Please double-check and try again, or call us."
+        f"לא הצלחנו לאתר רכב עם לוחית {plate}. "
+        "נא לבדוק שוב או להתקשר אלינו."
     )
