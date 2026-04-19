@@ -22,13 +22,13 @@ todos:
     status: completed
   - id: render-service
     content: Create Render Free Web Service from the repo with all env vars (rotated Green-API token, fresh ADMIN_API_KEY and webhook token, locked-down ALLOWED_ORIGINS)
-    status: pending
+    status: completed
   - id: green-api
     content: Update Green-API console webhook URL and authorization token to match production
-    status: pending
+    status: completed
   - id: e2e-verify
     content: "End-to-end test: admin CRUD, real WhatsApp message round-trip, redeploy persistence check, set up uptime ping"
-    status: pending
+    status: completed
 isProject: false
 ---
 
