@@ -10,7 +10,24 @@ load_dotenv(override=False)
 ALLOWED_ORIGINS: list[str] = [
     o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()
 ]
-DB_URL: str = os.getenv("DATABASE_URL", "")
+
+
+def _normalize_db_url(raw: str) -> str:
+    """Force psycopg3 driver for managed Postgres URLs.
+
+    Hosting providers (Neon, Render, Heroku) hand out URLs as `postgres://`
+    or `postgresql://`, which SQLAlchemy resolves to psycopg2 by default.
+    We want psycopg v3 (the wheel we ship in requirements.txt), so rewrite
+    the scheme explicitly. SQLite and other backends pass through untouched.
+    """
+    if raw.startswith("postgres://"):
+        return raw.replace("postgres://", "postgresql+psycopg://", 1)
+    if raw.startswith("postgresql://") and "+psycopg" not in raw:
+        return raw.replace("postgresql://", "postgresql+psycopg://", 1)
+    return raw
+
+
+DB_URL: str = _normalize_db_url(os.getenv("DATABASE_URL", ""))
 
 GREEN_API_BASE_URL: str = os.getenv("GREEN_API_BASE_URL", "https://api.green-api.com").rstrip("/")
 GREEN_API_ID_INSTANCE: str = os.getenv("GREEN_API_ID_INSTANCE", "")
